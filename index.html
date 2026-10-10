@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Odliczanie">
+<title>Moje odliczanie</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#141f32;--line:#293750;--text:#f4f7fb;--muted:#aab6c9;--accent:#8ce0c2;--danger:#ff9c9c}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#182b43 0%,var(--bg) 58%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh;padding:env(safe-area-inset-top) 16px calc(28px + env(safe-area-inset-bottom))}
+main{max-width:620px;margin:0 auto;padding-top:22px}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:800}
+h1{font-size:32px;line-height:1.1;margin:8px 0 8px;letter-spacing:-.04em}.intro{color:var(--muted);margin:0 0 24px;line-height:1.5}
+form,.event{background:rgba(20,31,50,.94);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:14px;box-shadow:0 12px 32px #0002}
+h2{font-size:17px;margin:0 0 16px}.field{margin-bottom:14px}label{display:block;font-size:13px;color:var(--muted);margin:0 0 7px}
+input{width:100%;font:inherit;font-size:16px;color:var(--text);background:#0b1424;border:1px solid #354661;border-radius:12px;padding:13px;min-height:48px}
+input:focus{outline:2px solid var(--accent);outline-offset:1px}
+button{font:inherit;font-weight:750;border:0;border-radius:12px;padding:13px 16px;min-height:46px;cursor:pointer}
+.primary{width:100%;background:var(--accent);color:#10251f}.secondary{background:#26364e;color:var(--text);padding:9px 12px;min-height:40px;font-size:14px}.delete{background:#43252f;color:#ffd4d4;padding:9px 12px;min-height:40px;font-size:14px}
+.list-head{display:flex;align-items:center;justify-content:space-between;margin:25px 2px 12px}.list-head h2{margin:0}.count{color:var(--muted);font-size:13px}
+.event-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.event h3{font-size:19px;margin:0 0 6px;overflow-wrap:anywhere}.date{font-size:13px;color:var(--muted);line-height:1.5}.tag{font-size:11px;color:var(--accent);background:#1c3c3b;padding:6px 8px;border-radius:99px;white-space:nowrap}
+.timer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:17px 0}.unit{background:#0b1424;border:1px solid #24334b;border-radius:12px;text-align:center;padding:12px 3px}.num{font-size:clamp(20px,6vw,29px);font-weight:850;letter-spacing:-.04em;font-variant-numeric:tabular-nums}.unit-label{font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
+.event-actions{display:flex;justify-content:flex-end;gap:8px}.empty{text-align:center;border:1px dashed #354661;border-radius:18px;padding:25px 18px;color:var(--muted);line-height:1.5}.empty strong{display:block;color:var(--text);margin-bottom:6px}.foot{text-align:center;color:#7f8ca2;font-size:12px;margin:22px 0}
+@media(min-width:520px){body{padding-left:24px;padding-right:24px}.event,form{padding:22px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Twoje ważne daty</div>
+  <h1>Odliczanie</h1>
+  <p class="intro">Dodaj wydarzenie i sprawdzaj, ile czasu zostało do jego rozpoczęcia. Twoje daty zapisują się na tym urządzeniu.</p>
+  <form id="event-form">
+    <h2 id="form-title">＋ Dodaj wydarzenie</h2>
+    <div class="field"><label for="event-name">Nazwa wydarzenia</label><input id="event-name" maxlength="100" placeholder="np. Wakacje, koncert, urodziny" required></div>
+    <div class="field"><label for="event-date">Data</label><input id="event-date" type="date" required></div>
+    <div class="field"><label for="event-time">Godzina</label><input id="event-time" type="time" value="12:00" required></div>
+    <button class="primary" id="save-btn" type="submit">Dodaj odliczanie</button>
+    <button class="secondary" id="cancel-edit" type="button" hidden style="width:100%;margin-top:8px">Anuluj edycję</button>
+  </form>
+  <div class="list-head"><h2>Twoje wydarzenia</h2><span class="count" id="event-count">0 wydarzeń</span></div>
+  <section id="events" aria-live="polite"></section>
+  <p class="foot">Wskazówka: dodaj tę stronę do ekranu głównego Safari, aby otwierać ją jak aplikację.</p>
+</main>
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const form=$('event-form'), nameInput=$('event-name'), dateInput=$('event-date'), timeInput=$('event-time');
+  let events=[];
+  try{events=JSON.parse(localStorage.getItem('moje-odliczanie-v1')||'[]');if(!Array.isArray(events))events=[];}catch(e){events=[];}
+  let editingId=null;
+  const pad=n=>String(n).padStart(2,'0');
+  const dateValue=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  dateInput.value=dateValue(new Date());
+  function save(){try{localStorage.setItem('moje-odliczanie-v1',JSON.stringify(events));}catch(e){}}
+  function target(e){return new Date(e.date+'T'+e.time+':00');}
+  function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function plural(n,one,few,many){if(n===1)return one;let x=n%100;if(x>=12&&x<=14)return many;x=n%10;if(x>=2&&x<=4)return few;return many;}
+  function render(){
+    events.sort((a,b)=>target(a)-target(b));
+    $('event-count').textContent=events.length+' '+(events.length===1?'wydarzenie':events.length>=2&&events.length<=4?'wydarzenia':'wydarzeń');
+    if(!events.length){$('events').innerHTML='<div class="empty"><strong>Jeszcze nic tu nie ma</strong>Dodaj pierwsze wydarzenie powyżej, a odliczanie pojawi się właśnie tutaj.</div>';return;}
+    const now=new Date();
+    $('events').innerHTML=events.map(e=>{
+      const t=target(e), diff=t-now, past=diff<0, total=Math.abs(diff);
+      const days=Math.floor(total/86400000), hours=Math.floor(total%86400000/3600000), mins=Math.floor(total%3600000/60000), secs=Math.floor(total%60000/1000);
+      const dateText=t.toLocaleDateString('pl-PL',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · '+pad(t.getHours())+':'+pad(t.getMinutes());
+      const status=past?'Już po wydarzeniu':diff<60000?'To już teraz':'Do wydarzenia';
+      return `<article class="event" data-id="${e.id}">
+        <div class="event-top"><div><h3>${escapeHTML(e.name)}</h3><div class="date">${dateText}</div></div><span class="tag">${status}</span></div>
+        <div class="timer">
+          <div class="unit"><div class="num">${days}</div><div class="unit-label">${plural(days,'dzień','dni','dni')}</div></div>
+          <div class="unit"><div class="num">${pad(hours)}</div><div class="unit-label">godz.</div></div>
+          <div class="unit"><div class="num">${pad(mins)}</div><div class="unit-label">min</div></div>
+          <div class="unit"><div class="num">${pad(secs)}</div><div class="unit-label">sek</div></div>
+        </div>
+        <div class="event-actions"><button class="secondary edit" type="button">Edytuj</button><button class="delete remove" type="button">Usuń</button></div>
+      </article>`;
+    }).join('');
+  }
+  form.addEventListener('submit',e=>{
+    e.preventDefault();
+    const name=nameInput.value.trim();if(!name||!dateInput.value||!timeInput.value)return;
+    if(editingId){const item=events.find(x=>x.id===editingId);if(item){item.name=name;item.date=dateInput.value;item.time=timeInput.value;}}
+    else events.push({id:String(Date.now())+'-'+Math.random().toString(36).slice(2,7),name,date:dateInput.value,time:timeInput.value});
+    save();resetForm();render();
+  });
+  function resetForm(){editingId=null;form.reset();dateInput.value=dateValue(new Date());timeInput.value='12:00';$('form-title').textContent='＋ Dodaj wydarzenie';$('save-btn').textContent='Dodaj odliczanie';$('cancel-edit').hidden=true;}
+  $('cancel-edit').addEventListener('click',resetForm);
+  $('events').addEventListener('click',e=>{
+    const card=e.target.closest('.event');if(!card)return;const id=card.dataset.id;
+    if(e.target.closest('.remove')){events=events.filter(x=>x.id!==id);save();if(editingId===id)resetForm();render();}
+    if(e.target.closest('.edit')){const item=events.find(x=>x.id===id);if(!item)return;editingId=id;nameInput.value=item.name;dateInput.value=item.date;timeInput.value=item.time;$('form-title').textContent='Edytuj wydarzenie';$('save-btn').textContent='Zapisz zmiany';$('cancel-edit').hidden=false;form.scrollIntoView({behavior:'smooth',block:'start'});nameInput.focus({preventScroll:true});}
+  });
+  render();setInterval(render,1000);
+})();
+</script>
+</body>
+</html>
